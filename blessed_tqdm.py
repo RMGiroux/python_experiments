@@ -8,7 +8,11 @@ term = Terminal()
 
 """
     A simple experiment to see if TQDM (great progress bars!) and blessings
-    (great terminal location and colour control)
+    (great terminal location and colour control) can coexist.
+
+    TODO: This should be wrapped in a something that can be pumped from
+    asyncio.
+
 """
 for i in range(10):
     with term.location(1,1):
