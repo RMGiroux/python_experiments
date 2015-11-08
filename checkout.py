@@ -2,6 +2,7 @@ __author__ = 'RMGiroux'
 
 import asyncio
 from asyncio import subprocess
+import sys
 
 class OutputCollector:
     def __init__(self, name):
@@ -15,9 +16,9 @@ class OutputCollector:
 
 
 @asyncio.coroutine
-def read_stdout(callback):
+def read_stdout(stream, callback):
     while True:
-        line = yield from stdout.readline()
+        line = yield from stream.readline()
         print('received', repr(line))
         if not line:
             break
@@ -30,8 +31,8 @@ def async_exec(repo, stdoutCallback):
         ("git clone %s"%repo),stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
 
     tasks = []
-    if proc.stdout is not None:
-        tasks.append(read_stdout(proc.stdout(stdoutCallback)))
+    if fork.stdout is not None:
+        tasks.append(read_stdout(fork.stdout, stdoutCallback))
     else:
         print('No stdout')
 
@@ -42,3 +43,11 @@ def async_exec(repo, stdoutCallback):
     return retCode
 
 
+def test_callback(line):
+    print("Received: %s"%line)
+
+
+loop = asyncio.get_event_loop()
+
+task = async_exec(sys.argv[1], test_callback)
+loop.run_until_complete(task)
