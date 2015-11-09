@@ -26,9 +26,9 @@ def read_stdout(stream, callback):
             callback(line)
 
 @asyncio.coroutine
-def async_exec(repo, stdoutCallback):
+def async_exec(command, stdoutCallback):
     fork = yield from asyncio.create_subprocess_shell(
-        ("git clone %s"%repo),stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+        (command),stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
 
     tasks = []
     if fork.stdout is not None:
@@ -44,10 +44,20 @@ def async_exec(repo, stdoutCallback):
 
 
 def test_callback(line):
-    print("Received: %s"%line)
+    print("Received: '%s'"%line)
 
 
 loop = asyncio.get_event_loop()
 
-task = async_exec(sys.argv[1], test_callback)
-loop.run_until_complete(task)
+tasks = []
+for command in sys.argv[1:]:
+    task = async_exec(command, test_callback)
+    tasks.append(task)
+
+loop.run_until_complete(asyncio.wait(tasks))
+
+# Test with
+# PATH=$PWD/../bde-tools/bin:$PATH python3 ~/PycharmProjects/python_experiments/checkout.py \
+# "export WAFLOCK=.waf-lock-dbg_exc_mt BDE_WAF_UFID=dbg_exc_mt; waf configure build --target=bsl" \
+# "export WAFLOCK=.waf-lock-opt_exc_mt BDE_WAF_UFID=opt_exc_mt; waf configure build --target=bsl"
+
