@@ -4,6 +4,9 @@ import asyncio
 from asyncio import subprocess
 import sys
 
+from pylibinit import addlibpath
+addlibpath.add_lib_path()
+
 class OutputCollector:
     def __init__(self, name):
         self.name = name
