@@ -2,13 +2,18 @@ __author__ = 'RMGiroux'
 
 import asyncio
 from asyncio import subprocess
+
 import sys
+
+import re
 
 from pylibinit import addlibpath
 addlibpath.add_lib_path()
 
-import blessings
-import tqdm
+from blessings import Terminal
+from tqdm import format_meter
+
+term = Terminal()
 
 class OutputCollector:
     def __init__(self, name):
@@ -25,7 +30,7 @@ class OutputCollector:
 def read_stdout(stream, callback):
     while True:
         line = yield from stream.readline()
-        print('received', repr(line))
+
         if not line:
             break
         else:
@@ -48,34 +53,55 @@ def async_exec(command, stdoutCallback):
 
     return retCode
 
-def run_waf(directory, ufid):
+def run_waf(directory, ufid, position):
     prefix="%s/_build/%s"%(directory, ufid)
     waflock=".waf-lock-%s"%ufid
-    build_dir="%s/_build/%s"
+    build_dir="_build/%s"%(ufid)
 
     environment="export PREFIX=%s WAFLOCK=%s BDE_WAF_UFID=%s BDE_WAF_BUILD_DIR=%s"%(prefix,waflock,ufid,build_dir)
 
-    command="%s; cd %s; waf configure clean build --test=run -j6 -k"%(environment, directory)
+    command="%s; cd %s; waf configure clean build --test=run -j6 -k 2>&1 | tee %s.out "%(environment, directory, ufid)
 
-    print("Starting command %s"%command)
+    #with term.location(1, 30 + (position * 5)):
+    #    print("Starting command %s"%command)
+
     task=async_exec(command,
-                    lambda x: test_callback(ufid, x))
+                    lambda x: test_callback(position, ufid, x))
 
     return task
 
 
-def test_callback(ufid, line):
-    print("%12s: '%s'"%(ufid, line))
+regex=b"\[\s*(\d+)/\s*(\d+)\s*\] \w+\s+(.*)"
+progress_regex=re.compile(regex)
+#print("Regex is: ", regex)
+
+def test_callback(position, ufid, line):
+    match = progress_regex.match(line)
+    if match is not None:
+        with term.location(1, position * 2):
+            print(format_meter(int(match.group(1)),
+                               int(match.group(2)),
+                               0,
+                               prefix = ("%-20s"%ufid)),
+                   " %50s" % match.group(3).decode("utf-8")[-50:])
 
 
 loop = asyncio.get_event_loop()
 
+checkout_path = "/Development/mgiroux/git/bde"
+
 tasks = []
-tasks.append(run_waf("/home/mgiroux/bde", "opt_exc_mt"))
-tasks.append(run_waf("/home/mgiroux/bde", "opt_exc_mt_64"))
-tasks.append(run_waf("/home/mgiroux/bde", "dbg_exc_mt"))
-tasks.append(run_waf("/home/mgiroux/bde", "dbg_exc_mt_64"))
-tasks.append(run_waf("/home/mgiroux/bde", "dbg_exc_mt_cpp11"))
+position = 1
+tasks.append(run_waf(checkout_path, "opt_exc_mt", position))
+position += 1
+tasks.append(run_waf(checkout_path, "opt_exc_mt_64", position))
+position += 1
+tasks.append(run_waf(checkout_path, "dbg_exc_mt", position))
+position += 1
+tasks.append(run_waf(checkout_path, "dbg_exc_mt_64", position))
+position += 1
+tasks.append(run_waf(checkout_path, "dbg_exc_mt_cpp11", position))
+position += 1
 
 loop.run_until_complete(asyncio.wait(tasks))
 
