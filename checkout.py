@@ -7,6 +7,9 @@ import sys
 from pylibinit import addlibpath
 addlibpath.add_lib_path()
 
+import blessings
+import tqdm
+
 class OutputCollector:
     def __init__(self, name):
         self.name = name
