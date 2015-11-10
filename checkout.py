@@ -88,15 +88,11 @@ def test_callback(position, ufid, line):
 
 loop = asyncio.get_event_loop()
 
-checkout_path = "/Development/mgiroux/git/bde"
+checkout_path = sys.argv[1]
 
 tasks = []
 position = 1
 tasks.append(run_waf(checkout_path, "opt_exc_mt", position))
-position += 1
-tasks.append(run_waf(checkout_path, "opt_exc_mt_64", position))
-position += 1
-tasks.append(run_waf(checkout_path, "dbg_exc_mt", position))
 position += 1
 tasks.append(run_waf(checkout_path, "dbg_exc_mt_64", position))
 position += 1
