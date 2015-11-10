@@ -87,6 +87,7 @@ def line_callback(position, ufid, line):
             print(format_meter(int(match.group(1)),
                                int(match.group(2)),
                                0,
+                               ascii=True,
                                prefix = ("%-20s"%ufid)),
                    " %50s" % match.group(3).decode("utf-8")[-50:])
 
