@@ -53,20 +53,25 @@ def async_exec(command, stdoutCallback):
 
     return retCode
 
-def run_waf(directory, ufid, position):
+def run_waf(directory, ufid, position, target=None):
     prefix="%s/_build/%s"%(directory, ufid)
     waflock=".waf-lock-%s"%ufid
     build_dir="_build/%s"%(ufid)
 
     environment="export PREFIX=%s WAFLOCK=%s BDE_WAF_UFID=%s BDE_WAF_BUILD_DIR=%s"%(prefix,waflock,ufid,build_dir)
 
-    command="%s; cd %s; waf configure clean build --test=run -j6 -k 2>&1 | tee %s.out "%(environment, directory, ufid)
+    waf_command = "waf configure clean build --test=run -j6 -k"
+
+    if target is not None:
+        waf_command += (" --target=%s"%target)
+
+    command="%s; cd %s; %s 2>&1 | tee %s.out "%(environment, directory, waf_command, ufid)
 
     #with term.location(1, 30 + (position * 5)):
     #    print("Starting command %s"%command)
 
     task=async_exec(command,
-                    lambda x: test_callback(position, ufid, x))
+                    lambda x: line_callback(position, ufid, x))
 
     return task
 
@@ -75,7 +80,7 @@ regex=b"\[\s*(\d+)/\s*(\d+)\s*\] \w+\s+(.*)"
 progress_regex=re.compile(regex)
 #print("Regex is: ", regex)
 
-def test_callback(position, ufid, line):
+def line_callback(position, ufid, line):
     match = progress_regex.match(line)
     if match is not None:
         with term.location(1, position * 2):
@@ -92,14 +97,20 @@ checkout_path = sys.argv[1]
 
 tasks = []
 position = 1
-tasks.append(run_waf(checkout_path, "opt_exc_mt", position))
+tasks.append(run_waf(checkout_path, "opt_exc_mt", position, target="bslmf"))
 position += 1
-tasks.append(run_waf(checkout_path, "dbg_exc_mt_64", position))
+tasks.append(run_waf(checkout_path, "dbg_exc_mt_64", position, target="bslstl"))
 position += 1
-tasks.append(run_waf(checkout_path, "dbg_exc_mt_cpp11", position))
+tasks.append(run_waf(checkout_path, "dbg_exc_mt_cpp11", position, target="bsl,bdl"))
 position += 1
 
-loop.run_until_complete(asyncio.wait(tasks))
+
+with term.location(1, (position + 2) * 2):
+    with term.hidden_cursor():
+        loop.run_until_complete(asyncio.wait(tasks))
+
+        loop.close()
+
 
 # Test with
 # PATH=$PWD/../bde-tools/bin:$PATH python3 ~/PycharmProjects/python_experiments/checkout.py \
