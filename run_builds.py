@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 __author__ = 'RMGiroux'
 
 import asyncio
@@ -78,9 +80,22 @@ def run_waf(directory, ufid, position, target=None):
 
 regex=b"\[\s*(\d+)/\s*(\d+)\s*\] \w+\s+(.*)"
 progress_regex=re.compile(regex)
-#print("Regex is: ", regex)
+
+test_summary=b"Test Summary"
+test_summary_regex=re.compile(test_summary)
+
+test_pass=b"All tests passed."
+test_pass_regex=re.compile(test_pass)
+
+test_fail=b"tests have fail"
+test_fail_regex=re.compile(test_fail)
 
 def line_callback(position, ufid, line):
+    with term.location(1, 30 + position*2):
+        print(" " * 80)
+    with term.location(1, 30 + position*2):
+        print("%-80s" % (line.decode("ascii")[-80:]))
+
     match = progress_regex.match(line)
     if match is not None:
         with term.location(1, position * 2):
@@ -88,8 +103,33 @@ def line_callback(position, ufid, line):
                                int(match.group(2)),
                                0,
                                ascii=True,
-                               prefix = ("%-20s"%ufid)),
-                   " %50s" % match.group(3).decode("utf-8")[-50:])
+                               prefix = ("%-20s"%ufid)))
+        with term.location(5, position * 2 + 1):
+            print("%60s" % match.group(3).decode("utf-8")[-60:])
+
+        return                                                         # RETURN
+
+    match = test_summary_regex.match(line)
+    if match is not None:
+        with term.location(5, position * 2 + 1):
+            print("%-60s" % " ")
+
+        return                                                         # RETURN
+
+    match = test_pass_regex.match(line)
+    if match is not None:
+        with term.location(5, position * 2 + 1):
+            print("%-30s" % line.decode("utf-8")[30:])
+
+        return                                                         # RETURN
+
+
+    match = test_fail_regex.match(line)
+    if match is not None:
+        with term.location(35, position * 2 + 1):
+            print("%-30s" % line.decode("utf-8")[30:])
+
+        return                                                         # RETURN
 
 
 loop = asyncio.get_event_loop()
@@ -98,19 +138,23 @@ checkout_path = sys.argv[1]
 
 tasks = []
 position = 1
-tasks.append(run_waf(checkout_path, "opt_exc_mt", position, target="bslmf"))
+tasks.append(run_waf(checkout_path, "opt_exc_mt", position, target="bsls"))
 position += 1
-tasks.append(run_waf(checkout_path, "dbg_exc_mt_64", position, target="bslstl"))
+tasks.append(run_waf(checkout_path, "dbg_exc_mt_64", position, target="bslscm"))
 position += 1
-tasks.append(run_waf(checkout_path, "dbg_exc_mt_cpp11", position, target="bsl,bdl"))
+tasks.append(run_waf(checkout_path, "dbg_exc_mt_cpp11", position, target="bsltf"))
 position += 1
-
 
 with term.location(1, (position + 2) * 2):
     with term.hidden_cursor():
+        print("Starting run_until_complete")
         loop.run_until_complete(asyncio.wait(tasks))
 
+        print("Starting to call close()")
         loop.close()
+        print("Done call to close()")
+
+print("Exited term contexts")
 
 
 # Test with
