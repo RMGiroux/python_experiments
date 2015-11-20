@@ -2,6 +2,8 @@
 
 __author__ = 'RMGiroux'
 
+debug_mode = 0
+
 import asyncio
 from asyncio import subprocess
 
@@ -91,12 +93,15 @@ test_fail=b"tests have fail"
 test_fail_regex=re.compile(test_fail)
 
 def line_callback(position, ufid, line):
-    with term.location(1, 30 + position*2):
-        print(" " * 80)
-    with term.location(1, 30 + position*2):
-        print("%-80s" % (line.decode("ascii")[-80:]))
+    line = line.rstrip()
 
-    match = progress_regex.match(line)
+    if debug_mode:
+        with term.location(1, 30 + position*2):
+            print(" " * 80)
+        with term.location(1, 30 + position*2):
+            print("%-20s: %-50s" % (ufid, line.decode("ascii")[-50:]))
+
+    match = progress_regex.search(line)
     if match is not None:
         with term.location(1, position * 2):
             print(format_meter(int(match.group(1)),
@@ -105,29 +110,58 @@ def line_callback(position, ufid, line):
                                ascii=True,
                                prefix = ("%-20s"%ufid)))
         with term.location(5, position * 2 + 1):
-            print("%60s" % match.group(3).decode("utf-8")[-60:])
+            print("%60s" % match.group(3).decode("ascii")[-60:])
 
         return                                                         # RETURN
 
-    match = test_summary_regex.match(line)
+    match = test_summary_regex.search(line)
     if match is not None:
         with term.location(5, position * 2 + 1):
-            print("%-60s" % " ")
+            print("%60s" % " ")
+        with term.location(5, position * 2 + 1):
+            print("%-60s" % line.decode("ascii")[-60:])
+
+        if debug_mode:
+            with term.location(1, 40 + position*3):
+                print("%-20s: Test summary matched"%ufid)
+
+            with term.location(1, 75):
+                print("%-20s: test summary match - hit enter to continue"%ufid)
+
+                my_input = sys.stdin.readline()
 
         return                                                         # RETURN
 
-    match = test_pass_regex.match(line)
+    match = test_pass_regex.search(line)
     if match is not None:
         with term.location(5, position * 2 + 1):
-            print("%-30s" % line.decode("utf-8")[30:])
+            print("[%-60s]" % term.green(line.decode("ascii")[-60:]))
+
+        if debug_mode:
+            with term.location(1, 41 + position*3):
+                print("%-20s: Test pass regex matched"%ufid)
+
+            with term.location(1, 75):
+                print("%-20s: test pass    match - hit enter to continue"%ufid)
+
+                my_input = sys.stdin.readline()
 
         return                                                         # RETURN
 
 
-    match = test_fail_regex.match(line)
+    match = test_fail_regex.search(line)
     if match is not None:
-        with term.location(35, position * 2 + 1):
-            print("%-30s" % line.decode("utf-8")[30:])
+        with term.location(5, position * 2 + 1):
+            print("[%-60s]" % term.red(line.decode("ascii")[-60:]))
+
+        if debug_mode:
+            with term.location(1, 42 + position*3):
+                print("%-20s: Test fail regex matched"%ufid)
+
+            with term.location(1, 75):
+                print("%-20s: test fail    match - hit enter to continue"%ufid)
+
+                my_input = sys.stdin.readline()
 
         return                                                         # RETURN
 
@@ -142,7 +176,7 @@ tasks.append(run_waf(checkout_path, "opt_exc_mt", position, target="bsls"))
 position += 1
 tasks.append(run_waf(checkout_path, "dbg_exc_mt_64", position, target="bslscm"))
 position += 1
-tasks.append(run_waf(checkout_path, "dbg_exc_mt_cpp11", position, target="bsltf"))
+tasks.append(run_waf(checkout_path, "dbg_exc_mt_cpp11", position, target="bsls"))
 position += 1
 
 with term.location(1, (position + 2) * 2):
@@ -154,7 +188,13 @@ with term.location(1, (position + 2) * 2):
         loop.close()
         print("Done call to close()")
 
+term.location(1, 75)
 print("Exited term contexts")
+
+if debug_mode:
+    print("Hit enter to exit")
+
+    my_input = sys.stdin.readline()
 
 
 # Test with
