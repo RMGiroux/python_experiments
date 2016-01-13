@@ -188,6 +188,9 @@ tasks.append(
         run_waf(checkout_path, "dbg_exc_mt_cpp11", position, target="bsls"))
 position += 1
 
+
+print(term.clear())
+
 with term.location(1, (position + 2) * 2):
     with term.hidden_cursor():
         print("Starting run_until_complete")
