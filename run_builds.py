@@ -6,7 +6,7 @@ debug_mode = 0
 
 import asyncio
 from asyncio import subprocess
-
+from datetime import datetime, timedelta
 import sys
 
 import re
@@ -117,6 +117,7 @@ class LineProcessor:
         self.ufid = ufid
         self.uplid = uplid
         self.position = LineProcessor.position
+        self.start_time = datetime.now()
 
         LineProcessor.position = LineProcessor.position + 1
 
@@ -135,7 +136,8 @@ class LineProcessor:
         match = progress_regex.search(line)
         if match is not None:
             with term.location(1, self.position * 2):
-                print(format_meter(int(match.group(1)), int(match.group(2)), 0,
+                print(format_meter(int(match.group(1)), int(match.group(2)),
+                                   (datetime.now() - self.start_time).total_seconds(),
                                    ascii=True, prefix=("%-20s" % self.ufid)))
             with term.location(5, self.position * 2 + 1):
                 print("%60s" % match.group(3).decode("ascii")[-60:])
