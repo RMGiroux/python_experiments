@@ -82,7 +82,9 @@ def run_waf(directory, ufid, position, target=None):
     # with term.location(1, 30 + (position * 5)):
     #    print("Starting command %s"%command)
 
-    task = async_exec(command, lambda x: line_callback(position, ufid, x))
+    line_proc = LineProcessor(ufid, "uplid-placeholder", position)
+
+    task = async_exec(command, lambda x: line_proc.line_callback(x))
 
     return task
 
@@ -99,78 +101,86 @@ test_pass_regex = re.compile(test_pass)
 test_fail = b"tests have fail"
 test_fail_regex = re.compile(test_fail)
 
+class LineProcessor:
+    def __init__(self, ufid, uplid, position):
+        self.ufid = ufid
+        self.uplid = uplid
+        self.position = position
 
-def line_callback(position, ufid, line):
-    line = line.rstrip()
+        self.diagnostic_buffer = ""
+        self.processing_diag   = False
 
-    if debug_mode:
-        with term.location(1, 30 + position * 2):
-            print(" " * 80)
-        with term.location(1, 30 + position * 2):
-            print("%-20s: %-50s" % (ufid, line.decode("ascii")[-50:]))
-
-    match = progress_regex.search(line)
-    if match is not None:
-        with term.location(1, position * 2):
-            print(format_meter(int(match.group(1)), int(match.group(2)), 0,
-                               ascii=True, prefix=("%-20s" % ufid)))
-        with term.location(5, position * 2 + 1):
-            print("%60s" % match.group(3).decode("ascii")[-60:])
-
-        return  # RETURN
-
-    match = test_summary_regex.search(line)
-    if match is not None:
-        with term.location(5, position * 2 + 1):
-            print("%60s" % " ")
-        with term.location(5, position * 2 + 1):
-            print("%-60s" % line.decode("ascii")[-60:])
+    def line_callback(self, line):
+        line = line.rstrip()
 
         if debug_mode:
-            with term.location(1, 40 + position * 3):
-                print("%-20s: Test summary matched" % ufid)
+            with term.location(1, 30 + self.position * 2):
+                print(" " * 80)
+            with term.location(1, 30 + self.position * 2):
+                print("%-20s: %-50s" % (self.ufid, line.decode("ascii")[-50:]))
 
-            with term.location(1, 75):
-                print(
-                        "%-20s: test summary match - hit enter to continue" % ufid)
+        match = progress_regex.search(line)
+        if match is not None:
+            with term.location(1, self.position * 2):
+                print(format_meter(int(match.group(1)), int(match.group(2)), 0,
+                                   ascii=True, prefix=("%-20s" % self.ufid)))
+            with term.location(5, self.position * 2 + 1):
+                print("%60s" % match.group(3).decode("ascii")[-60:])
 
-                my_input = sys.stdin.readline()
+            return  # RETURN
 
-        return  # RETURN
+        match = test_summary_regex.search(line)
+        if match is not None:
+            with term.location(5, self.position * 2 + 1):
+                print("%60s" % " ")
+            with term.location(5, self.position * 2 + 1):
+                print("%-60s" % line.decode("ascii")[-60:])
 
-    match = test_pass_regex.search(line)
-    if match is not None:
-        with term.location(5, position * 2 + 1):
-            print("[%-60s]" % term.green(line.decode("ascii")[-60:]))
+            if debug_mode:
+                with term.location(1, 40 + self.position * 3):
+                    print("%-20s: Test summary matched" % self.ufid)
 
-        if debug_mode:
-            with term.location(1, 41 + position * 3):
-                print("%-20s: Test pass regex matched" % ufid)
+                with term.location(1, 75):
+                    print(
+                            "%-20s: test summary match - hit enter to continue" % self.ufid)
 
-            with term.location(1, 75):
-                print(
-                        "%-20s: test pass    match - hit enter to continue" % ufid)
+                    my_input = sys.stdin.readline()
 
-                my_input = sys.stdin.readline()
+            return  # RETURN
 
-        return  # RETURN
+        match = test_pass_regex.search(line)
+        if match is not None:
+            with term.location(5, self.position * 2 + 1):
+                print("[%-60s]" % term.green(line.decode("ascii")[-60:]))
 
-    match = test_fail_regex.search(line)
-    if match is not None:
-        with term.location(5, position * 2 + 1):
-            print("[%-60s]" % term.red(line.decode("ascii")[-60:]))
+            if debug_mode:
+                with term.location(1, 41 + self.position * 3):
+                    print("%-20s: Test pass regex matched" % self.ufid)
 
-        if debug_mode:
-            with term.location(1, 42 + position * 3):
-                print("%-20s: Test fail regex matched" % ufid)
+                with term.location(1, 75):
+                    print(
+                            "%-20s: test pass    match - hit enter to continue" % self.ufid)
 
-            with term.location(1, 75):
-                print(
-                        "%-20s: test fail    match - hit enter to continue" % ufid)
+                    my_input = sys.stdin.readline()
 
-                my_input = sys.stdin.readline()
+            return  # RETURN
 
-        return  # RETURN
+        match = test_fail_regex.search(line)
+        if match is not None:
+            with term.location(5, self.position * 2 + 1):
+                print("[%-60s]" % term.red(line.decode("ascii")[-60:]))
+
+            if debug_mode:
+                with term.location(1, 42 + self.position * 3):
+                    print("%-20s: Test fail regex matched" % self.ufid)
+
+                with term.location(1, 75):
+                    print(
+                            "%-20s: test fail    match - hit enter to continue" % self.ufid)
+
+                    my_input = sys.stdin.readline()
+
+            return  # RETURN
 
 
 loop = asyncio.get_event_loop()
@@ -194,7 +204,12 @@ print(term.clear())
 with term.location(1, (position + 2) * 2):
     with term.hidden_cursor():
         print("Starting run_until_complete")
-        loop.run_until_complete(asyncio.wait(tasks))
+
+        try:
+            loop.run_until_complete(asyncio.wait(tasks))
+        except e:
+            print("Failed with exception:")
+            print(e)
 
         print("Starting to call close()")
         loop.close()
