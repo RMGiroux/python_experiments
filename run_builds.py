@@ -62,7 +62,7 @@ def async_exec(command, stdoutCallback):
     return retCode
 
 
-def run_waf(directory, ufid, position, target=None):
+def run_waf(directory, ufid, target=None):
     prefix = "%s/_build/%s" % (directory, ufid)
     waflock = ".waf-lock-%s" % ufid
     build_dir = "_build/%s" % (ufid)
@@ -82,15 +82,15 @@ def run_waf(directory, ufid, position, target=None):
     # with term.location(1, 30 + (position * 5)):
     #    print("Starting command %s"%command)
 
-    line_proc = LineProcessor(ufid, "uplid-placeholder", position)
+    line_proc = LineProcessor(ufid, "uplid-placeholder")
 
     task = async_exec(command, lambda x: line_proc.line_callback(x))
 
     return task
 
 
-regex = b"\[\s*(\d+)/\s*(\d+)\s*\] \w+\s+(.*)"
-progress_regex = re.compile(regex)
+progress_regex_string = b"\[\s*(\d+)/\s*(\d+)\s*\] \w+\s+(.*)"
+progress_regex = re.compile(progress_regex_string)
 
 test_summary = b"Test Summary"
 test_summary_regex = re.compile(test_summary)
@@ -102,10 +102,23 @@ test_fail = b"tests have fail"
 test_fail_regex = re.compile(test_fail)
 
 class LineProcessor:
-    def __init__(self, ufid, uplid, position):
+    position = 1
+
+    block_start_pattern_string = b"\\[(\\S+) \\((WARNING|ERROR|TEST)\\)\\] <<<<<<<<<<"
+    block_end_pattern_string = b">>>>>>>>>>"
+    block_pattern_string = block_start_pattern_string + b"(.*?)" + block_end_pattern_string
+
+    block_start_pattern = re.compile(block_start_pattern_string)
+    # re.S is aka re.DOTALL, so "." matches newlines as well.
+    block_pattern = re.compile(block_pattern_string, re.S)
+    block_end_pattern = re.compile(block_end_pattern_string)
+
+    def __init__(self, ufid, uplid):
         self.ufid = ufid
         self.uplid = uplid
-        self.position = position
+        self.position = LineProcessor.position
+
+        LineProcessor.position = LineProcessor.position + 1
 
         self.diagnostic_buffer = ""
         self.processing_diag   = False
@@ -129,6 +142,32 @@ class LineProcessor:
 
             return  # RETURN
 
+        if self.processing_diag:
+            match = LineProcessor.block_end_pattern.search(line)
+            if match is not None:
+                self.diagnostic_buffer+=line
+                # TODO: Hand off diagnostic to database
+                with term.location(1, 50):
+                    print(" " * 80)
+                with term.location(1, 50):
+                    print(self.diagnostic_buffer[0:60])
+
+                self.processing_diag = False
+                return
+
+            self.diagnostic_buffer+=line
+            return
+
+        match = LineProcessor.block_start_pattern.search(line)
+        if match is not None:
+            self.processing_diag = True
+            self.diagnostic_buffer = line
+
+            self.diagnostic_component = match.group(1)
+            self.diagnostic_type = match.group(2)
+
+            return
+
         match = test_summary_regex.search(line)
         if match is not None:
             with term.location(5, self.position * 2 + 1):
@@ -140,7 +179,7 @@ class LineProcessor:
                 with term.location(1, 40 + self.position * 3):
                     print("%-20s: Test summary matched" % self.ufid)
 
-                with term.location(1, 75):
+                with term.location(1, 50):
                     print(
                             "%-20s: test summary match - hit enter to continue" % self.ufid)
 
@@ -157,7 +196,7 @@ class LineProcessor:
                 with term.location(1, 41 + self.position * 3):
                     print("%-20s: Test pass regex matched" % self.ufid)
 
-                with term.location(1, 75):
+                with term.location(1, 50):
                     print(
                             "%-20s: test pass    match - hit enter to continue" % self.ufid)
 
@@ -174,7 +213,7 @@ class LineProcessor:
                 with term.location(1, 42 + self.position * 3):
                     print("%-20s: Test fail regex matched" % self.ufid)
 
-                with term.location(1, 75):
+                with term.location(1, 50):
                     print(
                             "%-20s: test fail    match - hit enter to continue" % self.ufid)
 
@@ -188,35 +227,26 @@ loop = asyncio.get_event_loop()
 checkout_path = sys.argv[1]
 
 tasks = []
-position = 1
-tasks.append(run_waf(checkout_path, "opt_exc_mt", position, target="bsls"))
-position += 1
+tasks.append(run_waf(checkout_path, "opt_exc_mt", target="bsls"))
 tasks.append(
-        run_waf(checkout_path, "dbg_exc_mt_64", position, target="bslscm"))
-position += 1
+        run_waf(checkout_path, "dbg_exc_mt_64", target="bslscm"))
 tasks.append(
-        run_waf(checkout_path, "dbg_exc_mt_cpp11", position, target="bsls"))
-position += 1
+        run_waf(checkout_path, "dbg_exc_mt_cpp11", target="bsls"))
 
 
 print(term.clear())
 
-with term.location(1, (position + 2) * 2):
+with term.location(1, (LineProcessor.position + 2) * 2):
     with term.hidden_cursor():
-        print("Starting run_until_complete")
-
         try:
             loop.run_until_complete(asyncio.wait(tasks))
         except e:
             print("Failed with exception:")
             print(e)
 
-        print("Starting to call close()")
         loop.close()
-        print("Done call to close()")
 
-term.location(1, 75)
-print("Exited term contexts")
+print(term.move(1,50))
 
 if debug_mode:
     print("Hit enter to exit")
